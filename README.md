@@ -8,5 +8,5 @@ There is alot of room for improvement so i'm hoping someone will take what's her
 
 After connecting your ESP on the wifi, go to it's IP address and configure the alarm for each day of the week.
 
-![image](https://user-images.githubusercontent.com/86655396/123769442-6cf1d880-d91d-11eb-9c1e-621043aba477.png)
+![image](https://user-images.githubusercontent.com/86655396/123769709-ac202980-d91d-11eb-8c47-206e0bcf1d02.png)
 
