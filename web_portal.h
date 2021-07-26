@@ -7,9 +7,9 @@
 
 struct AlarmDataStruct {
 
-int Hour[7];
-int Minute[7];
-bool AlarmOn[7];
+uint8_t Hour[7];
+uint8_t Minute[7];
+uint8_t AlarmOn[7];
   
 };
 

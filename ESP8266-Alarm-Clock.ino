@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "web_portal.h"
+#include "ESP8266TimerInterrupt.h"
+#include "restore_factory_settings.h"
 
 #define daylightSavings true
 
@@ -22,6 +24,9 @@
 #define TenMins 600000000
 #define lightOutput 4 //D2 = GPIO4
 #define lightSwInput 5 //D1 = GPIO5
+#define TIMER_INTERVAL_MS	1000 
+
+ESP8266Timer ITimer;
 
 int timer;
 int alarmTriggerTime;
@@ -29,9 +34,48 @@ int checkDayTimer;
 struct CurrentTime Current;
 bool AlarmActive;
 struct AlarmDataStruct AlarmData;
-int pollFrequency = TenSecs;
 int dayofWeek;
 int WiFiTimer;
+int localSecs;
+char factory_settings_stored [3];
+
+void ICACHE_RAM_ATTR TimerHandler(void)
+{
+localSecs++;
+if (localSecs >= 60)
+{
+	localSecs = 0;
+	Current.Minute++;
+	if(Current.Minute >= 60)
+	{
+		Current.Minute = 0;
+		Current.Hour++;
+		if(Current.Hour >= 24)
+		{
+			Current.Hour = 0;
+		}
+	}
+}
+char tempTime[6];
+if(Current.Minute<10 && localSecs<10)
+{
+  sprintf(tempTime,"0%d:0%d", Current.Minute,localSecs);
+}
+else if(Current.Minute<10)
+{
+  sprintf(tempTime,"0%d:%d", Current.Minute,localSecs);
+}
+else if(localSecs<10)
+{
+  sprintf(tempTime,"%d:0%d", Current.Minute,localSecs);
+}
+else
+{
+  sprintf(tempTime,"%d:%d", Current.Minute,localSecs);
+}
+Serial.println(tempTime);
+}
+
 
 
 void setup() {
@@ -39,6 +83,11 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Booting");
   EEPROM.begin(512);
+  EEPROM_readAnything(150, factory_settings_stored);
+  if(memcmp(&factory_settings_stored,"YES",3) != 0)
+  {
+    restore_factory_settings();
+  }
   WiFi.mode(WIFI_STA);
   WiFiManager wm;
   pinMode(lightOutput, OUTPUT);  //Initialise the output for the light
@@ -69,6 +118,16 @@ void setup() {
   Serial.println(AlarmData.Minute[dayofWeek]);
   timer = micros();
   WiFiTimer = timer;
+  
+  // Interval in microsecs
+  if (ITimer.attachInterruptInterval(TIMER_INTERVAL_MS * 1000, TimerHandler))
+  {
+  Serial.println("Starting  ITimer OK, millis() = " + String(millis()));
+  }
+  else
+  {
+  Serial.println("Can't set ITimer correctly. Select another freq. or interval");
+  }
 }
 
 
@@ -77,7 +136,7 @@ void loop() {
   ArduinoOTA.handle();
   handle_client();
 
-   if((micros() - WiFiTimer) > OneMin) // check if wifi connection lost and if so try to reconnect
+   if((micros() - WiFiTimer) > TenMins) // check if wifi connection lost and if so try to reconnect
    {
       if(WiFi.status() != WL_CONNECTED)
          {
@@ -86,21 +145,11 @@ void loop() {
       WiFiTimer = micros();
    }
 
-  //update current hour
-  if ((micros() - timer) > pollFrequency)
+  //update current hour from NTP server
+  if ((micros() - timer) > TenMins)
   {
     Current = Current_Time();
     timer = micros();
-    if (abs(AlarmData.Hour[dayofWeek] - Current.Hour) < 2) //if alarm less than 2 hours away
-    {
-      pollFrequency = TenSecs;
-      Serial.println("alarm is soon checking time every 10 secs");
-    }
-    else
-    {
-      pollFrequency = OneMin;
-      Serial.println("alarm is ages away checking time every minute");
-    }
   }
 
 
@@ -134,6 +183,7 @@ void loop() {
         if(Current.Minute == AlarmData.Minute[dayofWeek])
         {
           AlarmActive = true;
+          alarmTriggerTime = micros();
           Serial.println("Its time for your alarm!");
           TurnLightOn();
         }
@@ -163,8 +213,6 @@ void loop() {
       TurnLightOff();
     }
   }
-
-  
 }
 
 
