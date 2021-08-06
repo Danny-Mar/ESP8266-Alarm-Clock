@@ -12,15 +12,17 @@
 struct CurrentTime {  
   int Hour;
   int Minute;
+  int Second;
+  int Day;
 };
 
-int lastDay;
 
 String weekDays[7]={"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
 // Define NTP Client to get time
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
+
 
 void setup_time(int timeZone) {
   
@@ -31,8 +33,6 @@ timeClient.begin();
 }
 
 
-
-
 struct CurrentTime Current_Time() {
   
 struct CurrentTime Current;
@@ -41,6 +41,8 @@ char tempTime[6];
 timeClient.update();
 Current.Hour = timeClient.getHours();
 Current.Minute = timeClient.getMinutes();
+Current.Second = timeClient.getSeconds();
+Current.Day = timeClient.getDay();
 
 if(Current.Hour<10 && Current.Minute<10)
 {
@@ -58,35 +60,11 @@ else
 {
   sprintf(tempTime,"%d:%d", Current.Hour,Current.Minute);
 }
+Serial.print(weekDays[Current.Day]);
+Serial.print(" - ");
 Serial.println(tempTime);
 
 return Current;
-}
-
-
-bool new_day(int today)
-{
-  bool newDay;
-  if (today != lastDay)
-  {
-    lastDay = today;
-    newDay = true;
-  }
-  else
-  {
-    newDay = false;
-  }
-  return newDay;
-}
-
-
-int GetDayofWeek() {
-  
-int tempInt = timeClient.getDay();
-Serial.print("Today is ");
-Serial.println(weekDays[tempInt]);
-return tempInt;
-
 }
 
 

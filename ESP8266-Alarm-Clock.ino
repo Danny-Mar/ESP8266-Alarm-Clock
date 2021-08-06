@@ -11,13 +11,7 @@
 #include "ESP8266TimerInterrupt.h"
 #include "restore_factory_settings.h"
 
-#define daylightSavings true
-
-#if defined daylightSavings
-  #define timeZone 12
-#else
-  #define timeZone 13
-#endif
+#define timeZone 12
 
 #define TenSecs 10000000
 #define OneMin 60000000
@@ -30,50 +24,16 @@ ESP8266Timer ITimer;
 
 int timer;
 int alarmTriggerTime;
-int checkDayTimer;
 struct CurrentTime Current;
 bool AlarmActive;
 struct AlarmDataStruct AlarmData;
-int dayofWeek;
 int WiFiTimer;
-int localSecs;
 char factory_settings_stored [3];
+bool OneSecoundPassed;
 
 void ICACHE_RAM_ATTR TimerHandler(void)
 {
-localSecs++;
-if (localSecs >= 60)
-{
-	localSecs = 0;
-	Current.Minute++;
-	if(Current.Minute >= 60)
-	{
-		Current.Minute = 0;
-		Current.Hour++;
-		if(Current.Hour >= 24)
-		{
-			Current.Hour = 0;
-		}
-	}
-}
-char tempTime[6];
-if(Current.Minute<10 && localSecs<10)
-{
-  sprintf(tempTime,"0%d:0%d", Current.Minute,localSecs);
-}
-else if(Current.Minute<10)
-{
-  sprintf(tempTime,"0%d:%d", Current.Minute,localSecs);
-}
-else if(localSecs<10)
-{
-  sprintf(tempTime,"%d:0%d", Current.Minute,localSecs);
-}
-else
-{
-  sprintf(tempTime,"%d:%d", Current.Minute,localSecs);
-}
-Serial.println(tempTime);
+OneSecoundPassed = true;
 }
 
 
@@ -109,13 +69,12 @@ void setup() {
   SetupOTA();
   setup_time(timeZone);
   Current = Current_Time();
-  dayofWeek = GetDayofWeek();
 
   EEPROM_readAnything(100, AlarmData);
   Serial.print("Alarm set for ");
-  Serial.print(AlarmData.Hour[dayofWeek]);
+  Serial.print(AlarmData.Hour[Current.Day]);
   Serial.print(":");
-  Serial.println(AlarmData.Minute[dayofWeek]);
+  Serial.println(AlarmData.Minute[Current.Day]);
   timer = micros();
   WiFiTimer = timer;
   
@@ -145,6 +104,12 @@ void loop() {
       WiFiTimer = micros();
    }
 
+   if(OneSecoundPassed)
+   {
+    updateLocalTime();
+    OneSecoundPassed = false;
+   }
+
   //update current hour from NTP server
   if ((micros() - timer) > TenMins)
   {
@@ -162,30 +127,21 @@ void loop() {
   }
 
 
-  if ((micros() - checkDayTimer) > TenMins)
-  {
-    dayofWeek = GetDayofWeek();
-    if (new_day(dayofWeek))
-    {
-      EEPROM_readAnything(100, AlarmData);
-      Serial.println("It's a new day, re-enabling today's alarm");
-    }
-    checkDayTimer = micros();
-  }
-
-
-  if (AlarmData.AlarmOn[dayofWeek])
+  if (AlarmData.AlarmOn[Current.Day])
   {
     if (!AlarmActive)//do not enter this routine if alarm already active
     {
-      if (Current.Hour == AlarmData.Hour[dayofWeek])
+      if (Current.Hour == AlarmData.Hour[Current.Day])
       {
-        if(Current.Minute == AlarmData.Minute[dayofWeek])
+        if(Current.Minute == AlarmData.Minute[Current.Day])
         {
-          AlarmActive = true;
-          alarmTriggerTime = micros();
-          Serial.println("Its time for your alarm!");
-          TurnLightOn();
+          if(Current.Second > 0 && Current.Second < 3)
+          {
+            AlarmActive = true;
+            alarmTriggerTime = micros();
+            Serial.println("Its time for your alarm!");
+            TurnLightOn();
+          }
         }
       }
     }
@@ -197,7 +153,6 @@ void loop() {
     if (AlarmActive)
     {
       AlarmActive = false;
-      AlarmData.AlarmOn[dayofWeek] = false;
      Serial.println("You woke up. good work");
     }
     else
@@ -231,4 +186,45 @@ void TurnLightOn() {
   digitalWrite(lightOutput, LOW);   // Turn the Light on
   Serial.println("Turning Light on");
   }
+}
+
+void updateLocalTime () {
+Current.Second++;
+if (Current.Second >= 60)
+{
+  Current.Second = 0;
+  Current.Minute++;
+  if(Current.Minute >= 60)
+  {
+    Current.Minute = 0;
+    Current.Hour++;
+    if(Current.Hour >= 24)
+    {
+      Current.Hour = 0;
+      Current.Day++;
+      if(Current.Day >= 7)
+      {
+        Current.Day = 0;
+      }
+    }
+  }
+}
+char tempTime[6];
+if(Current.Minute<10 && Current.Second<10)
+{
+  sprintf(tempTime,"0%d:0%d", Current.Minute,Current.Second);
+}
+else if(Current.Minute<10)
+{
+  sprintf(tempTime,"0%d:%d", Current.Minute,Current.Second);
+}
+else if(Current.Second<10)
+{
+  sprintf(tempTime,"%d:0%d", Current.Minute,Current.Second);
+}
+else
+{
+  sprintf(tempTime,"%d:%d", Current.Minute,Current.Second);
+}
+Serial.println(tempTime);
 }
